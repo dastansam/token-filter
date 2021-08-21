@@ -1,5 +1,5 @@
 import "./styles.css";
-import { getFilteredHolders, getHolders } from "./service";
+import { getHoldersDifference, getHolders } from "./service";
 import { useState } from "react";
 import Loader from "react-loader-spinner";
 import xlsx from "xlsx";
@@ -10,12 +10,11 @@ export default function App() {
     "0x015804f45b4b465f364821623d04814fb9c68302"
   );
   const [from, setFrom] = useState("");
-  const [minBalance, setMinBalance] = useState(10000);
+  const [minBalance, setMinBalance] = useState(1000);
   const [minTransaction, setMinTransaction] = useState(100);
   const [loading, setLoading] = useState(false);
   const [filteredHolders, setFilteredHolders] = useState([]);
   const [amount, setAmount] = useState(69.69);
-  const [limitedHolders, setLimitedHolders] = useState([]);
 
   const onSubmit = async (event) => {
     event.preventDefault();
@@ -26,78 +25,28 @@ export default function App() {
     const diffTime = Math.abs(new Date(from) - new Date());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-    let curPage = 1;
-
-    let tokenHolders = await getFilteredHolders(
+    const { holders } = await getHoldersDifference(
       contract,
-      minBalance,
       diffDays,
-      minTransaction,
-      curPage
+      minBalance,
+      minTransaction
     );
 
-    handleAirdrop(tokenHolders, curPage);
-    await handleExportXlsx(tokenHolders, curPage);
-
-    setFilteredHolders(tokenHolders);
-    while (true) {
-      curPage += 1;
-      tokenHolders = await getFilteredHolders(
-        contract,
-        minBalance,
-        diffDays,
-        minTransaction,
-        curPage
-      );
-      if (tokenHolders.done || tokenHolders.error) {
-        break;
-      } else {
-        handleAirdrop(tokenHolders, curPage);
-        await handleExportXlsx(tokenHolders, curPage);
-        setFilteredHolders(filteredHolders.concat(tokenHolders));
-      }
-    }
+    setFilteredHolders(holders);
 
     setLoading(false);
   };
 
-  const handleAirdrop = (tokenHolders, curPage, last = false) => {
-    if (last) {
-      const element = document.createElement("a");
+  const handleAirdrop = (event) => {
+    event.preventDefault();
 
-      const holdersArr = JSON.stringify(
-        tokenHolders.map((holder) => holder.holderAddress)
-      );
-
-      const amountVals = Array(tokenHolders.length).fill(amount * 10 ** 18);
-      const holders = new Blob(
-        [holdersArr.replace(/['"]+/g, ""), `[${amountVals.toString()}]`],
-        {
-          type: "text/plain"
-        }
-      );
-      element.href = URL.createObjectURL(holders);
-      element.download = `holders-${contract}-${curPage}.txt`;
-      document.body.appendChild(element);
-      element.click();
-    }
-
-    const totalHoldersNow = limitedHolders.concat(tokenHolders);
-
-    if (totalHoldersNow.length < 800) {
-      setLimitedHolders(totalHoldersNow);
-      return;
-    }
-    setLimitedHolders(totalHoldersNow);
-    // event.preventDefault();
     const element = document.createElement("a");
-    // const elementAmounts = document.createElement("a");
 
     const holdersArr = JSON.stringify(
-      totalHoldersNow.map((holder) => holder.holderAddress)
+      filteredHolders.map((holder) => holder.holderAddress)
     );
 
-    const amountVals = Array(totalHoldersNow.length).fill(amount * 10 ** 18);
+    const amountVals = Array(filteredHolders.length).fill(amount * 10 ** 18);
     const holders = new Blob(
       [holdersArr.replace(/['"]+/g, ""), `[${amountVals.toString()}]`],
       {
@@ -105,17 +54,14 @@ export default function App() {
       }
     );
     element.href = URL.createObjectURL(holders);
-    element.download = `holders-${contract}-${curPage}.txt`;
-    // elementAmounts.href = URL.createObjectURL(amounts);
-    // elementAmounts.download = `amounts-${contract}.txt`;
+    element.download = `holders-${contract}.txt`;
     document.body.appendChild(element);
-    // document.body.appendChild(elementAmounts);
     element.click();
-    // elementAmounts.click();
   };
 
-  const handleExportXlsx = async (tokenHolders, curPage) => {
-    const worksheet = xlsx.utils.json_to_sheet(tokenHolders);
+  const handleExportXlsx = async (event) => {
+    event.preventDefault();
+    const worksheet = xlsx.utils.json_to_sheet(filteredHolders);
     const wb = xlsx.utils.book_new();
     xlsx.utils.book_append_sheet(wb, worksheet, "SheetJs");
     let buff = xlsx.write(wb, {
@@ -123,7 +69,7 @@ export default function App() {
       bookSST: false,
       type: "array"
     });
-    saveAs(new Blob([buff]), `holders-${contract}-${curPage}.xlsx`, {
+    saveAs(new Blob([buff]), `holders-${contract}.xlsx`, {
       type: "application/octet-stream"
     });
   };
@@ -190,17 +136,17 @@ export default function App() {
       </form>
       <button
         disabled={loading || !filteredHolders.length}
-        onClick={() => handleExportXlsx(filteredHolders, "all")}
-        style={{ width: 120, height: 80, marginBottom: 10, marginRight: 20 }}
+        onClick={handleExportXlsx}
+        style={{ width: 120, height: 30, marginBottom: 10, marginRight: 20 }}
       >
-        Export all in one csv
+        Export xlsx
       </button>
       <button
         disabled={loading || !filteredHolders.length}
-        onClick={() => handleAirdrop(filteredHolders, "all")}
-        style={{ width: 120, height: 80, marginBottom: 10 }}
+        onClick={handleAirdrop}
+        style={{ width: 120, height: 30, marginBottom: 10 }}
       >
-        Export to airdrops (800 addresses each)
+        Export airdrop
       </button>
       <Loader
         type="TailSpin"
@@ -216,7 +162,7 @@ export default function App() {
         <h4>Min balance (USD): {minBalance}</h4>
         <h4>Min buy transactions (USD): {minTransaction}</h4>
         <h4>Amount to airdrop: {amount}</h4>
-        {/* {filteredHolders.map((holder) => (
+        {filteredHolders.map((holder) => (
           <div key={holder.holderAddress}>
             <div>
               <b>Holder address</b>: {holder.holderAddress}
@@ -228,14 +174,14 @@ export default function App() {
               <b>Balance (USD):</b> {holder.balanceInUsd}
             </div>
             <div>
-              <b>Price (USD)</b> : {holder.priceUsd}
+              <b>Historic balance at {from} (USD):</b> {holder.oldBalanceInUsd}
             </div>
             <div>
-              <b>Historic balance at {from} (USD):</b> {holder.balanceBefore}
+              <b>Price (USD)</b> : {holder.priceUsd}
             </div>
             <br />
           </div>
-        ))} */}
+        ))}
       </div>
     </div>
   );

@@ -4,8 +4,111 @@ import BigNumber from "bignumber.js";
 const apikey = "A1QGI6IXRG475CCBFA94ICN1SGBYHDNHII";
 const apiUrl = "https://api.bscscan.com/api";
 const pancakeSwapApi = "https://api.pancakeswap.info/api/v2";
+const covalentApi = "https://api.covalenthq.com/v1";
+const covalentKey = "ckey_33f53f3d98d1430b9f10dfe4158:";
 
 let DECIMALS = 0;
+
+export async function getHoldersDifference(
+  address,
+  days,
+  minUsdBalance,
+  minTransaction
+) {
+  const tokenInfo = await _getTokenInfo(address);
+  const covalentUrl = `${covalentApi}/56/tokens/${address}/token_holders_changes/`;
+  const { latestBlock } = await _getLatestBlock();
+  const from = daysToBlocks(days);
+  let holders = [];
+  let curPage = 0;
+
+  console.log(`days: ${days} from: ${latestBlock - from} to: ${latestBlock}`);
+
+  let response = await axios.get(covalentUrl, {
+    params: {
+      "starting-block": latestBlock - from,
+      "page-size": 10000
+      // match: "diff > 1000000"
+    },
+    auth: { username: covalentKey }
+  });
+  if (response.data.error) {
+    return { error: response.data.error_message };
+  }
+  let decimals = new BigNumber(10).pow(tokenInfo.decimals);
+
+  const minQuantity = new BigNumber(minTransaction)
+    .dividedBy(tokenInfo.price)
+    .multipliedBy(decimals);
+
+  const minTxQuantity = new BigNumber(minUsdBalance)
+    .dividedBy(tokenInfo.price)
+    .multipliedBy(decimals);
+
+  holders = holders.concat(
+    response.data.data.items.flatMap((holder) =>
+      filterHolder(holder, tokenInfo, minQuantity, minTxQuantity)
+    )
+  );
+
+  console.log(response.data.data);
+
+  while (!response.error && response.data.has_more) {
+    curPage += 1;
+    const response = await axios.get(apiUrl, {
+      params: {
+        module: "token",
+        action: "tokenholderlist",
+        contractaddress: address,
+        page: curPage,
+        offset: 10000,
+        apikey
+      }
+    });
+
+    holders = holders.concat(
+      response.data.result.flatMap((holder) =>
+        validateHolder(holder, minUsdBalance, tokenInfo)
+      )
+    );
+  }
+
+  console.log(holders.length);
+
+  return { holders };
+}
+
+function filterHolder(holderObject, tokenInfo, minQuantity, minTxQuantity) {
+  if (
+    holderObject["next_balance"].toString() === "0" &&
+    new BigNumber(holderObject["diff"]).lte(0)
+  ) {
+    return [];
+  }
+  let decimals = new BigNumber(10).pow(tokenInfo.decimals);
+
+  if (
+    minQuantity.lt(holderObject["next_balance"]) &&
+    minTxQuantity.lt(holderObject["diff"])
+  ) {
+    let balance = new BigNumber(holderObject["next_balance"]).dividedBy(
+      decimals
+    );
+    let oldBalance = new BigNumber(holderObject["prev_balance"]).dividedBy(
+      decimals
+    );
+    return [
+      {
+        holderAddress: holderObject["token_holder"],
+        tokenQuantity: holderObject["next_balance"],
+        balanceInUsd: balance.multipliedBy(tokenInfo.price).toFixed(6),
+        oldBalanceInUsd: oldBalance.multipliedBy(tokenInfo.price).toFixed(6),
+        priceUsd: tokenInfo.price
+      }
+    ];
+  }
+  return [];
+}
 
 /**
  *
