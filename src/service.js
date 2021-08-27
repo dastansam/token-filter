@@ -278,10 +278,18 @@ async function _getTokenInfo(address) {
  * @param {*} days
  * @param {*} minTransaction
  */
-async function filterHolders(address, holders, days, minTransaction) {
+async function filterHolders(
+  address, 
+  liqPool,
+  cex,
+  holders, 
+  days, 
+  minTransaction
+  ) {
   const filteredHolders = [];
   const { latestBlock } = await _getLatestBlock();
   const from = daysToBlocks(days);
+  console.log(days);
 
   console.log(`days: ${days} from: ${latestBlock - from} to: ${latestBlock}`);
 
@@ -295,6 +303,8 @@ async function filterHolders(address, holders, days, minTransaction) {
         .multipliedBy(DECIMALS);
       const qualifies = await _filterTransfers(
         address,
+        liqPool,
+        cex,
         holder.holderAddress,
         latestBlock - from,
         latestBlock,
@@ -311,6 +321,8 @@ async function filterHolders(address, holders, days, minTransaction) {
 
 async function _filterTransfers(
   contractAddress,
+  liqPool,
+  cex,
   address,
   from,
   to,
@@ -334,8 +346,23 @@ async function _filterTransfers(
 
   let transfers = response.data.result;
   let counter = 0;
+  
+  if (liqPool || cex) {
+    console.log('filtering by liq pool: ' + liqPool);
+    while (incoming.lt(minQuantity) && counter < transfers.length) {
+      if (transfers[counter].from === liqPool || transfers[counter].from === cex) {
+        incoming = incoming.plus(new BigNumber(transfers[counter].value));
+      }
+      counter += 1;
+    }
+  
+    if (incoming.gte(minQuantity)) {
+      return true;
+    }
+    return false;
+  }
   while (incoming.lt(minQuantity) && counter < transfers.length) {
-    if (transfers[counter].to === address.toString()) {
+    if (transfers[counter].to) {
       incoming = incoming.plus(new BigNumber(transfers[counter].value));
     }
     counter += 1;
@@ -398,12 +425,13 @@ export async function getHolders(address, minBalance, days, minTransaction) {
  */
 export async function getFilteredHolders(
   address,
+  liqPool,
+  cex,
   minBalance,
   days,
   minTransaction,
-  curPage
 ) {
-  const response = await getHoldersByPage(address, minBalance, curPage);
+  const response = await getAllHolders(address, minBalance);
   if (response.error) {
     console.log("Encountered error: " + response.error);
     return { error: "Encountered error" };
@@ -417,6 +445,8 @@ export async function getFilteredHolders(
   console.log("first filter: " + holders.length);
   const filteredHolders = await filterHolders(
     address,
+    liqPool,
+    cex,
     holders,
     days,
     minTransaction

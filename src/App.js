@@ -1,5 +1,5 @@
 import "./styles.css";
-import { getHoldersDifference, getHolders } from "./service";
+import { getFilteredHolders  } from "./service";
 import { useState } from "react";
 import Loader from "react-loader-spinner";
 import xlsx from "xlsx";
@@ -13,22 +13,33 @@ export default function App() {
   const [minBalance, setMinBalance] = useState(1000);
   const [minTransaction, setMinTransaction] = useState(100);
   const [loading, setLoading] = useState(false);
+  const [liqPool, setLiqPool] = useState("");
+  const [cex, setCex] = useState('')
   const [filteredHolders, setFilteredHolders] = useState([]);
   const [amount, setAmount] = useState(69.69);
 
+  const _diffDays = (a, b) => {
+    const _MS_PER_DAY = 1000 * 60 * 60 * 24;
+      // Discard the time and time-zone information.
+    const utc1 = Date.UTC(a.getFullYear(), a.getMonth(), a.getDate());
+    const utc2 = Date.UTC(b.getFullYear(), b.getMonth(), b.getDate());
+
+    return Math.floor((utc2 - utc1) / _MS_PER_DAY);
+  }
   const onSubmit = async (event) => {
     event.preventDefault();
     if (from === "") {
       return;
     }
     setLoading(true);
-    const diffTime = Math.abs(new Date(from) - new Date());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const diffDays = _diffDays(new Date(from), new Date());
 
-    const { holders } = await getHoldersDifference(
+    const holders = await getFilteredHolders(
       contract,
-      diffDays,
+      liqPool,
+      cex,
       minBalance,
+      diffDays,
       minTransaction
     );
 
@@ -99,6 +110,20 @@ export default function App() {
             type="date"
             style={{ width: 370, marginBottom: 10 }}
             onChange={(e) => setFrom(e.target.value)}
+          />
+          <br />
+          <input
+            placeholder="liquidity pool"
+            type="text"
+            style={{ width: 370, marginBottom: 10 }}
+            onChange={(e) => setLiqPool(e.target.value)}
+          />
+          <br />
+          <input
+            placeholder="CEX account"
+            type="text"
+            style={{ width: 370, marginBottom: 10 }}
+            onChange={(e) => setCex(e.target.value)}
           />
           <br />
           <input
@@ -173,9 +198,9 @@ export default function App() {
             <div>
               <b>Balance (USD):</b> {holder.balanceInUsd}
             </div>
-            <div>
+            {/* <div>
               <b>Historic balance at {from} (USD):</b> {holder.oldBalanceInUsd}
-            </div>
+            </div> */}
             <div>
               <b>Price (USD)</b> : {holder.priceUsd}
             </div>
