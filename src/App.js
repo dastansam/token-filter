@@ -1,9 +1,24 @@
 import "./styles.css";
 import { getFilteredHolders  } from "./service";
+import { getHoldersDifference } from "./covalent";
 import { useState } from "react";
 import Loader from "react-loader-spinner";
 import xlsx from "xlsx";
 import { saveAs } from "file-saver";
+
+/**
+ * Divide array into chunks
+ * @returns 
+ */
+
+const toChunks = (array, parts) => {
+  console.log("parts: " + parts);
+  let result = [];
+  for (let i = parts; i > 0; i--) {
+      result.push(array.splice(0, Math.ceil(array.length / i)));
+  }
+  return result;
+}
 
 export default function App() {
   const [contract, setContract] = useState(
@@ -17,14 +32,15 @@ export default function App() {
   const [cex, setCex] = useState('')
   const [filteredHolders, setFilteredHolders] = useState([]);
   const [amount, setAmount] = useState(69.69);
+  const [fewHolders, setFewHolders] = useState(false);
 
-  const _diffDays = (a, b) => {
-    const _MS_PER_DAY = 1000 * 60 * 60 * 24;
+  const _diffSeconds = (a, b) => {
+    const _MS_PER_SECOND = 1000;
       // Discard the time and time-zone information.
     const utc1 = Date.UTC(a.getFullYear(), a.getMonth(), a.getDate());
     const utc2 = Date.UTC(b.getFullYear(), b.getMonth(), b.getDate());
 
-    return Math.floor((utc2 - utc1) / _MS_PER_DAY);
+    return Math.floor((utc2 - utc1) / _MS_PER_SECOND);
   }
   const onSubmit = async (event) => {
     event.preventDefault();
@@ -32,42 +48,80 @@ export default function App() {
       return;
     }
     setLoading(true);
-    const diffDays = _diffDays(new Date(from), new Date());
+    const diffSeconds = _diffSeconds(new Date(from), new Date());
+    if (fewHolders) {
+      const holders = await getHoldersDifference (
+        contract,
+        diffSeconds,
+        minBalance,
+        minTransaction
+      );
 
-    const holders = await getFilteredHolders(
-      contract,
-      liqPool,
-      cex,
-      minBalance,
-      diffDays,
-      minTransaction
-    );
+      if (holders.error) {
+        setFilteredHolders([]);
+      }
 
-    setFilteredHolders(holders);
+      setFilteredHolders(holders);
 
-    setLoading(false);
+      setLoading(false);
+    } else {
+      const holders = await getFilteredHolders(
+        contract,
+        liqPool,
+        cex,
+        minBalance,
+        diffSeconds,
+        minTransaction
+      );
+
+      if (holders.done || holders.error) {
+        setFilteredHolders([]);
+      }
+
+      setFilteredHolders(holders);
+
+      setLoading(false);
+  }
+
   };
 
   const handleAirdrop = (event) => {
     event.preventDefault();
 
-    const element = document.createElement("a");
+    const chunks = toChunks(filteredHolders, Math.ceil(filteredHolders.length/800));
+    console.log('len: ' + filteredHolders.length);
+    console.log(chunks);
+    let elements = [];
 
-    const holdersArr = JSON.stringify(
-      filteredHolders.map((holder) => holder.holderAddress)
-    );
+    for (let [index, chunk] of chunks.entries()) {
+      const element = document.createElement("a");
+      console.log(chunk);
+      const holdersArr = JSON.stringify(
+        chunk.map((holder) => holder.holderAddress)
+      );
 
-    const amountVals = Array(filteredHolders.length).fill(amount * 10 ** 18);
-    const holders = new Blob(
-      [holdersArr.replace(/['"]+/g, ""), `[${amountVals.toString()}]`],
-      {
-        type: "text/plain"
+      const amountVals = Array(chunk.length).fill(amount * 10 ** 18);
+      const holders = new Blob(
+        [holdersArr.replace(/['"]+/g, ""), `[${amountVals.toString()}]`],
+        {
+          type: "text/plain"
+        }
+      );
+      element.href = URL.createObjectURL(holders);
+      element.download = `holders-${contract}-${index}.txt`;
+      document.body.appendChild(element);
+      elements.push(element);
+    };
+    console.log(elements.length);
+    let interval = setInterval(download, 300, elements);
+    function download(elements) {
+      let element = elements.pop();
+      element.click();
+
+      if (elements.length === 0) {
+        clearInterval(interval);
       }
-    );
-    element.href = URL.createObjectURL(holders);
-    element.download = `holders-${contract}.txt`;
-    document.body.appendChild(element);
-    element.click();
+    }
   };
 
   const handleExportXlsx = async (event) => {
@@ -84,7 +138,6 @@ export default function App() {
       type: "application/octet-stream"
     });
   };
-
   return (
     <div className="App">
       <h1>Filter contract token holders</h1>
@@ -148,6 +201,16 @@ export default function App() {
             style={{ width: 370, marginBottom: 10 }}
             onChange={(e) => setAmount(e.target.value)}
             step={0.01}
+          />
+          <br/>
+          <p>token has less than 20k holders?
+            <br/>
+            Note: This query uses different API than BscScan, so it might not be accurate
+          </p>
+          <input
+            type="checkbox"
+            onChange={() => setFewHolders(!fewHolders)}
+            style={{ width: 370, marginBottom: 10 }}
           />
           <br />
           <button
