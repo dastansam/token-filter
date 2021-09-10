@@ -87,9 +87,10 @@ export default function App() {
 
   const handleAirdrop = (event) => {
     event.preventDefault();
-
-    const chunks = toChunks(filteredHolders, Math.ceil(filteredHolders.length/800));
-    console.log('len: ' + filteredHolders.length);
+    // copy object so that it doesn't get removed during dividing in chunks
+    const copiedHolders = Object.assign({}, filteredHolders);
+    const chunks = toChunks(copiedHolders, Math.ceil(copiedHolders.length/800));
+    console.log('len: ' + copiedHolders.length);
     console.log(chunks);
     let elements = [];
 
