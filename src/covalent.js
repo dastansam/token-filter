@@ -12,6 +12,7 @@ export async function getHoldersDifference(
     minTransaction
   ) {
     const tokenInfo = await _getTokenInfo(address);
+    console.log(tokenInfo);
     const covalentUrl = `${covalentApi}/56/tokens/${address}/token_holders_changes/`;
     const { latestBlock } = await _getLatestBlock();
     const from = secondsToBlocks(days);
@@ -49,7 +50,7 @@ export async function getHoldersDifference(
   
     console.log(response.data.data);
   
-    while (response.pagination && response.data.data.items.length > 0) {
+    while (response.data.data.items.length > 0) {
       curPage += 1;
       response = await axios.get(covalentUrl, {
         params: {
@@ -75,23 +76,24 @@ export async function getHoldersDifference(
 }
 
 function filterHolder(holderObject, tokenInfo, minQuantity, minTxQuantity) {
-if (
-    new BigNumber(holderObject["next_balance"]).lte(minTxQuantity)
-) {
-    return [];
-}
-let decimals = new BigNumber(10).pow(tokenInfo.decimals);
+  if (
+      new BigNumber(holderObject["next_balance"]).lte(minTxQuantity)
+  ) {
+      return [];
+  }
+  let decimals = new BigNumber(10).pow(tokenInfo.decimals);
 
-if (
-    minQuantity.lt(holderObject["next_balance"]) &&
-    minTxQuantity.lt(holderObject["diff"])
-) {
+  if (
+      minQuantity.lt(holderObject["next_balance"]) &&
+      minTxQuantity.lt(holderObject["diff"])
+  ) {
     let balance = new BigNumber(holderObject["next_balance"]).dividedBy(
     decimals
     );
     let oldBalance = new BigNumber(holderObject["prev_balance"]).dividedBy(
     decimals
     );
+    console.log('nice: ', balance, oldBalance);
     return [
     {
         holderAddress: holderObject["token_holder"],

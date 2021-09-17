@@ -33,6 +33,7 @@ export default function App() {
   const [filteredHolders, setFilteredHolders] = useState([]);
   const [amount, setAmount] = useState(69.69);
   const [fewHolders, setFewHolders] = useState(false);
+  const [error, setError] = useState(null);
 
   const _diffSeconds = (a, b) => {
     const _MS_PER_SECOND = 1000;
@@ -47,18 +48,22 @@ export default function App() {
     if (from === "") {
       return;
     }
+    setError(null);
     setLoading(true);
     const diffSeconds = _diffSeconds(new Date(from), new Date());
     if (fewHolders) {
-      const holders = await getHoldersDifference (
+      const holders = await getHoldersDifference(
         contract,
         diffSeconds,
         minBalance,
         minTransaction
       );
-
+      console.log(holders);
       if (holders.error) {
         setFilteredHolders([]);
+        setError({message: holders.error || "Unknown error"});
+        setLoading(false);
+        return;
       }
 
       setFilteredHolders(holders);
@@ -73,9 +78,17 @@ export default function App() {
         diffSeconds,
         minTransaction
       );
+      console.log(holders);
 
-      if (holders.done || holders.error) {
+      if (holders.error) {
         setFilteredHolders([]);
+        setError({message: holders.error || "Unknown error"});
+        setLoading(false);
+        return ;
+      }
+      else if(holders.done) {
+        setFilteredHolders([]);
+        return ;
       }
 
       setFilteredHolders(holders);
@@ -88,7 +101,7 @@ export default function App() {
   const handleAirdrop = (event) => {
     event.preventDefault();
     // copy object so that it doesn't get removed during dividing in chunks
-    const copiedHolders = Object.assign({}, filteredHolders);
+    const copiedHolders = filteredHolders.slice(0);
     const chunks = toChunks(copiedHolders, Math.ceil(copiedHolders.length/800));
     console.log('len: ' + copiedHolders.length);
     console.log(chunks);
@@ -246,31 +259,41 @@ export default function App() {
       />
       <br />
       <div>
-        <h3>Contract: {contract}</h3>
-        <h4>Total count: {filteredHolders.length}</h4>
-        <h4>Min balance (USD): {minBalance}</h4>
-        <h4>Min buy transactions (USD): {minTransaction}</h4>
-        <h4>Amount to airdrop: {amount}</h4>
-        {filteredHolders.map((holder) => (
-          <div key={holder.holderAddress}>
-            <div>
-              <b>Holder address</b>: {holder.holderAddress}
-            </div>
-            <div>
-              <b>Token quantity:</b> {holder.tokenQuantity}
-            </div>
-            <div>
-              <b>Balance (USD):</b> {holder.balanceInUsd}
-            </div>
-            {/* <div>
-              <b>Historic balance at {from} (USD):</b> {holder.oldBalanceInUsd}
-            </div> */}
-            <div>
-              <b>Price (USD)</b> : {holder.priceUsd}
-            </div>
-            <br />
+        {error ? (
+          <div style={{color: "red"}}>
+            Encountered following error:
+            <br/>
+            {error.message}
           </div>
-        ))}
+        ): 
+        <>
+          <h3>Contract: {contract}</h3>
+          <h4>Total count: {filteredHolders.length}</h4>
+          <h4>Min balance (USD): {minBalance}</h4>
+          <h4>Min buy transactions (USD): {minTransaction}</h4>
+          <h4>Amount to airdrop: {amount}</h4>
+          {filteredHolders.map((holder) => (
+            <div key={holder.holderAddress}>
+              <div>
+                <b>Holder address</b>: {holder.holderAddress}
+              </div>
+              <div>
+                <b>Token quantity:</b> {holder.tokenQuantity}
+              </div>
+              <div>
+                <b>Balance (USD):</b> {holder.balanceInUsd}
+              </div>
+              {/* <div>
+                <b>Historic balance at {from} (USD):</b> {holder.oldBalanceInUsd}
+              </div> */}
+              <div>
+                <b>Price (USD)</b> : {holder.priceUsd}
+              </div>
+              <br />
+            </div>
+          ))}
+        </>
+        }
       </div>
     </div>
   );

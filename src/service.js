@@ -29,7 +29,7 @@ async function getAllHolders(address, minUsdBalance) {
     }
   });
 
-  if (response.status === "0") {
+  if (response.data.status === "0") {
     return { error: response.data.result };
   }
 
@@ -52,6 +52,10 @@ async function getAllHolders(address, minUsdBalance) {
         apikey
       }
     });
+
+    if (response.data.status === "0") {
+      return { error: response.data.result };
+    }
 
     holders = holders.concat(
       response.data.result.flatMap((holder) =>
@@ -129,6 +133,7 @@ export async function _getTokenInfo(address) {
   if (response.status === "0") {
     return { error: response.data.result };
   }
+  console.log(response.data.result);
   DECIMALS = new BigNumber(10).pow(response.data.result[0].divisor);
   return {
     decimals: response.data.result[0].divisor,
