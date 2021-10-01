@@ -54,7 +54,7 @@ async function getAllHolders(address, minUsdBalance) {
     });
 
     if (response.data.status === "0") {
-      return { error: response.data.result };
+      break;
     }
 
     holders = holders.concat(
